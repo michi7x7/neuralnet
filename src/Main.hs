@@ -6,7 +6,7 @@ import Numeric.LinearAlgebra
 
 import Control.Monad.Trans.State
 import System.Random
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class
 import Control.Monad.Morph (hoist, generalize)
 import System.Random.Shuffle (shuffleM)
@@ -88,8 +88,7 @@ getCompTry = do
     return ct
 
 putPlayerTry :: SRP -> GameState ()
-putPlayerTry pt = do
-    playerTries %= (pt:)
+putPlayerTry pt = playerTries %= (pt:)
 
 
 gameIter :: SRP -> GameState (SRP, Double)
@@ -97,12 +96,10 @@ gameIter pt = do
     ct <- getCompTry
     putPlayerTry pt
     trainNet
-    if fst ct == winningMove pt then
-        wins %= (+1)
-    else if pt == winningMove (fst ct) then
-        losses %= (+1)
-    else
-        return ()
+
+    when (fst ct == winningMove pt) $ wins %= (+1)
+    when (pt == winningMove (fst ct)) $ losses %= (+1)
+
     return ct
 
 playerFeed = concat $ replicate 200 [Rock, Paper, Scissors, Rock]
@@ -111,10 +108,7 @@ gameLoop :: StateT GameStat IO ()
 gameLoop = do
     liftIO $ putStrLn "begin simulation"
     pf <- liftIO $ shuffleM playerFeed
-    res <- flip mapM playerFeed $ \pt -> do
-        (ct, crt) <- (hoist generalize . gameIter) pt
-        -- liftIO $ putStrLn $ "Player Try: " ++ show pt ++ " Computer Try: " ++ show ct ++ " certainty " ++ show crt
-        return (ct, crt)
+    res <- mapM (hoist generalize . gameIter) playerFeed
 
     win <- use wins
     los <- use losses
@@ -131,6 +125,4 @@ main = do
     nw <- makeNet
     let gs = makeStat nw
 
-    runStateT gameLoop gs
-
-    return ()
+    evalStateT gameLoop gs
