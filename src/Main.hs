@@ -11,6 +11,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Morph (hoist, generalize)
 import System.Random.Shuffle (shuffleM)
 import Control.Lens
+import Data.Char (toLower)
 
 type NW = Network Double
 data SRP = Scissors | Rock | Paper deriving (Eq, Ord)
@@ -19,6 +20,12 @@ instance Show SRP where
     show Scissors = "S"
     show Rock     = "R"
     show Paper    = "P"
+
+readSRP c = case toLower c of
+    's' -> Just Scissors
+    'r' -> Just Rock
+    'p' -> Just Paper
+    otherwise -> Nothing
 
 winningMove :: SRP -> SRP
 winningMove Scissors = Rock
@@ -108,18 +115,31 @@ gameLoop :: StateT GameStat IO ()
 gameLoop = do
     liftIO $ putStrLn "begin simulation"
     pf <- liftIO $ shuffleM playerFeed
-    res <- mapM (hoist generalize . gameIter) playerFeed
+    -- res <- mapM (hoist generalize . gameIter) playerFeed
+
+    loop
 
     win <- use wins
     los <- use losses
 
     liftIO $ do
         putStrLn "Wins and losses:"
-        print win
-        print los
+        putStrLn $ "Player " ++ show los ++ " Computer " ++ show win
         -- print $ playerTries st
         -- print $ computerTries st
-
+  where loop :: StateT GameStat IO ()
+        loop = do
+            liftIO $ putStrLn "Your move please: R,P,S"
+            choice <-liftIO getLine
+            let ch' = readSRP $ head choice
+            case ch' of
+                Nothing -> return ()
+                Just pt -> do
+                    (ct, crt) <- (hoist generalize . gameIter) pt
+                    win <- use wins
+                    los <- use losses
+                    liftIO . putStrLn $ "Computer tried " ++ show ct ++ " with certainty of " ++ show crt ++ " score: " ++ show los ++ ":" ++ show win
+                    loop
 main :: IO ()
 main = do
     nw <- makeNet
